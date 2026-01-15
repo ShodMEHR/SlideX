@@ -6,12 +6,11 @@ from pptx.enum.shapes import MSO_SHAPE
 import requests, json, re, textwrap, io
 
 # ================= CONFIG (SECURE) =================
-# Данные берутся из настроек "Secrets" твоего приложения
 try:
     AI_KEY = st.secrets["GROQ_API_KEY"]
-    S_ID = st.secrets.get("S_CODE", "SX-369")
+    S_ID = st.secrets.get("S_CODE", "SX-369") # Твой секретный код
 except:
-    st.error("Ошибка: Настройте Secrets в Streamlit Cloud!")
+    st.error("Ошибка: Настройте Secrets (GROQ_API_KEY и S_CODE) в Streamlit Cloud!")
     st.stop()
 
 MODEL_NAME = "llama-3.3-70b-versatile"
@@ -26,22 +25,19 @@ THEMES = {
 }
 
 # ================= CORE FUNCTIONS =================
-def ask_ai(topic, slides, lang, only_quiz=False):
-    mode = "Create a full presentation JSON" if not only_quiz else "Update ONLY the 10 quiz questions"
-    
-    # ТВОЙ НОВЫЙ ОБЪЕДИНЕННЫЙ ПРОМПТ (80-160 СЛОВ)
+def ask_ai(topic, slides, lang):
+    # Усиленный промпт для длинного текста (100-150 слов на слайд)
     prompt = f"""
-    {mode} about "{topic}" in {lang}. 
+    Create a professional presentation about "{topic}" in {lang}. 
     Slides: {slides}. 
     
-    IMPORTANT RULE:
-    Each slide in the "intro" field must contain at least 100-150 words of detailed text.
-    No brief points. No cards. No grids. Just deep explanatory paragraphs.
+    STRICT RULE: Each slide "intro" must contain at least 100-150 words of detailed, high-quality text. 
+    No short sentences. No bullet-only slides. Use deep analysis and explanatory paragraphs.
     
     JSON Format:
     {{
-      "slides": [{{"title": "", "intro": "DETAILED TEXT MIN 100 WORDS", "points": ["fact 1", "fact 2"]}}],
-      "quiz": [{{"q": "", "o": {{"A": "", "B": "", "C": ""}}, "a": "A"}}]
+      "slides": [{{"title": "Title", "intro": "MIN 100 WORDS OF TEXT", "points": ["Extra fact 1", "Extra fact 2"]}}],
+      "quiz": [{{"q": "Question?", "o": {{"A": "Option", "B": "Option", "C": "Option"}}, "a": "A"}}]
     }}
     """
     try:
@@ -49,7 +45,7 @@ def ask_ai(topic, slides, lang, only_quiz=False):
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {AI_KEY}"},
             json={"model": MODEL_NAME, "messages": [{"role": "user", "content": prompt}], "response_format": {"type": "json_object"}},
-            timeout=45
+            timeout=60
         ).json()
         return json.loads(r["choices"][0]["message"]["content"].strip())
     except:
@@ -95,83 +91,69 @@ st.title("🎨 SLIDEX PRO")
 
 # Sessions
 if "data" not in st.session_state: st.session_state.data = None
-if "step" not in st.session_state: st.session_state.step = "init"
-if "test_status" not in st.session_state: st.session_state.test_status = None
-if "quiz_key" not in st.session_state: st.session_state.quiz_key = 0
+if "t_val" not in st.session_state: st.session_state.t_val = ""
 
 with st.sidebar:
     st.header("⚙️ Настройки")
-    t_in = st.text_input("Тема", value=st.session_state.get("t_val", ""))
-    s_num = st.slider("Слайды", 2, 12, 6) # Лимит 2-12 слайдов
+    t_in = st.text_input("Тема", value=st.session_state.t_val)
+    s_num = st.slider("Слайды", 2, 12, 6)
     style = st.selectbox("Стиль", list(THEMES.keys()))
-    lang = st.selectbox("Язык", ["Russian", "English", "Tajik"])
+    lang = st.selectbox("Язык", ["Russian", "Tajik", "English"])
     
     st.write("---")
-    # СКРЫТЫЙ ВХОД: точка в самом низу панели
+    # СКРЫТЫЙ ВХОД (Точка внизу панели)
     a_code = st.text_input(".", type="password", help="System focus")
     is_owner = (a_code == S_ID)
 
     if st.button("🚀 Сгенерировать"):
         if t_in:
-            with st.spinner("ИИ готовит контент (100+ слов на слайд)..."):
+            with st.spinner("ИИ готовит подробный контент (100+ слов на слайд)..."):
                 res = ask_ai(t_in, s_num, lang)
                 if res:
                     st.session_state.data = res
-                    st.session_state.step = "preview"
                     st.session_state.t_val = t_in
-                    st.session_state.s_count = s_num
-                    st.session_state.test_status = None
-                    st.session_state.quiz_key += 1
+                    st.success("Контент готов!")
         else:
             st.warning("Введите тему!")
 
-# PREVIEW
-if st.session_state.data and st.session_state.step == "preview":
-    st.header("📝 Предпросмотр контента")
-    if is_owner: st.success("Админ-доступ активирован.")
+# ПРЕДПРОСМОТР И СКАЧИВАНИЕ
+if st.session_state.data:
+    st.divider()
     
+    # 1. ПРЕДПРОСМОТР ТЕКСТА
+    st.header("📝 Предпросмотр контента")
     for i, s in enumerate(st.session_state.data["slides"]):
         with st.expander(f"Слайд {i+1}: {s.get('title')}"):
             st.write(s.get('intro'))
             for p in s.get('points', []): st.write(f"- {p}")
-    
-    if st.button("Перейти к скачиванию ➔"):
-        st.session_state.step = "quiz"
-        st.rerun()
 
-# QUIZ / DOWNLOAD
-elif st.session_state.data and st.session_state.step == "quiz":
-    st.header("📥 Скачивание файла")
-    
-    quiz_data = st.session_state.data.get("quiz", [])[:10]
-    
+    st.divider()
+
+    # 2. ЛОГИКА ДОСТУПА К ФАЙЛУ
     if is_owner:
-        st.success("Чит-код SX-369 принят. Скачивание разрешено.")
-        show_download = True
-    else:
-        st.info("Ответьте правильно на 8 из 10 вопросов для скачивания.")
-        u_ans = []
-        for i, q in enumerate(quiz_data):
-            st.write(f"**{i+1}. {q['q']}**")
-            ans = st.radio(f"Ответ {i}", ["A","B","C"], format_func=lambda x: f"{x}: {q['o'][x]}", 
-                           key=f"q_{st.session_state.quiz_key}_{i}")
-            u_ans.append(ans)
-        
-        if st.button("Проверить баллы"):
-            score = sum(1 for i, a in enumerate(u_ans) if a == quiz_data[i]["a"])
-            if score >= 8:
-                st.session_state.test_status = "ok"
-            else:
-                st.error(f"Ваш балл: {score}/10. Нужно минимум 8.")
-                st.session_state.test_status = "fail"
-        
-        show_download = (st.session_state.test_status == "ok")
-
-    if show_download:
-        pptx_buffer = make_pptx(st.session_state.data, st.session_state.t_val, THEMES[style])
+        st.success("✅ Админ-доступ активен! Тест пропущен.")
+        pptx_buf = make_pptx(st.session_state.data, st.session_state.t_val, THEMES[style])
         st.download_button(
             label="📥 СКАЧАТЬ ПРЕЗЕНТАЦИЮ (.PPTX)",
-            data=pptx_buffer,
+            data=pptx_buf,
             file_name=f"{st.session_state.t_val}.pptx",
             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
         )
+    else:
+        st.subheader("🧠 Пройдите тест для скачивания (нужно 8/10)")
+        quiz_data = st.session_state.data.get("quiz", [])[:10]
+        u_ans = []
+        
+        for i, q in enumerate(quiz_data):
+            st.write(f"**{i+1}. {q['q']}**")
+            ans = st.radio(f"Ответ {i}", ["A","B","C"], format_func=lambda x: f"{x}: {q['o'][x]}", key=f"q_{i}")
+            u_ans.append(ans)
+        
+        if st.button("Проверить баллы и скачать"):
+            score = sum(1 for i, a in enumerate(u_ans) if a == quiz_data[i]["a"])
+            if score >= 8:
+                st.success(f"Балл: {score}/10. Доступ открыт!")
+                pptx_buf = make_pptx(st.session_state.data, st.session_state.t_val, THEMES[style])
+                st.download_button("📥 СКАЧАТЬ ФАЙЛ", pptx_buf, file_name="pres.pptx")
+            else:
+                st.error(f"Ваш балл: {score}/10. Нужно минимум 8. Попробуйте чит-код в боковом меню!")
