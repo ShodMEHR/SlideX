@@ -5,7 +5,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 import requests, json, io, time
 
-# 1. ОБНОВЛЕННЫЙ ПОРЯДОК СТИЛЕЙ (School первый, Luffy последний)
+# 1. ПОРЯДОК СТИЛЕЙ (School первый, Luffy последний)
 THEMES = {
     "SCHOOL STYLE": {"acc": (50, 150, 50), "icon": "✏️", "left": 1.0, "width": 11.3, "dark": True},
     "GIRLY STYLE": {"acc": (255, 105, 180), "icon": "🌸", "left": 1.5, "width": 10.3, "dark": False},
@@ -29,7 +29,7 @@ def ask_ai(topic, slides, lang):
         r = requests.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {AI_KEY}"},
             json={"model": "llama-3.3-70b-versatile", "messages": [
-                {"role": "system", "content": f"Academic professor. Write in {lang}. Exactly 130 words per slide."},
+                {"role": "system", "content": f"Professor. Write in {lang}. Exactly 130 words per slide."},
                 {"role": "user", "content": prompt}
             ], "response_format": {"type": "json_object"}}, timeout=120)
         return json.loads(r.json()["choices"][0]["message"]["content"])
@@ -47,17 +47,13 @@ def make_pptx(data, style_name, font_size):
         try: slide.shapes.add_picture(f"{style_name}.jpg", 0, 0, width=prs.slide_width, height=prs.slide_height)
         except: pass
         
-        if style_name == "GIRLY STYLE":
-            rect = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.2), Inches(1.2), Inches(10.8), Inches(5.8))
-            rect.fill.solid(); rect.fill.fore_color.rgb = RGBColor(255, 255, 255); rect.fill.alpha = 0.8
-        
-        # Заголовок
+        # ЗАГОЛОВОК (в файле Pt 40)
         p_t = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12.3), Inches(1.0)).text_frame.paragraphs[0]
         p_t.text = f"{theme['icon']} {str(s.get('title', '')).upper()}"
         p_t.font.name = 'Times New Roman'
         p_t.font.size, p_t.font.bold, p_t.font.color.rgb = Pt(40), True, RGBColor(*theme["acc"])
         
-        # ТЕКСТ С ИСПРАВЛЕННЫМ ИНТЕРВАЛОМ
+        # ТЕКСТ (в файле Pt {font_size})
         tf_obj = slide.shapes.add_textbox(Inches(theme["left"]), Inches(1.5), Inches(theme["width"]), Inches(5.5))
         tf = tf_obj.text_frame
         tf.word_wrap = True
@@ -65,7 +61,6 @@ def make_pptx(data, style_name, font_size):
         p.text = str(s.get('intro', ''))
         p.font.name = 'Times New Roman'
         p.font.size, p.font.color.rgb = Pt(font_size), txt_rgb
-        # ФИКС ЧИТАЕМОСТИ: Межстрочный интервал
         tf.line_spacing = 1.2 
         
     buf = io.BytesIO(); prs.save(buf); buf.seek(0)
@@ -83,7 +78,7 @@ with st.sidebar:
     st.header("Настройки")
     t_input = st.text_input("Тема презентации")
     s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
-    f_size = st.slider("Размер шрифта", 26, 40, 28)
+    f_size_final = st.slider("Шрифт в файле (Pt)", 26, 40, 28)
     lang_choice = st.selectbox("Язык", ["Russian", "Tajik", "English"])
     style_sel = st.selectbox("Стиль", list(THEMES.keys()))
     user_code = st.text_input("Код доступа", type="password") 
@@ -99,11 +94,19 @@ with st.sidebar:
                 st.rerun()
 
 if st.session_state.data:
-    st.header(f"Просмотр контента")
+    # 1. КОМФОРТНЫЙ ПРОСМОТР (Шрифт обычный, чтобы можно было читать)
+    st.header(f"Просмотр контента (Шрифт в файле будет {f_size_final} Pt)")
+    for i, s in enumerate(st.session_state.data['slides']):
+        st.subheader(f"{THEMES[style_sel]['icon']} Слайд {i+1}: {s.get('title')}")
+        # Здесь шрифт обычный, чтобы не было "каши" в браузере
+        st.write(s.get('intro'))
+        st.divider()
+
     if user_code == "SX-369":
         st.success("🔓 Режим SX")
-        st.download_button("📥 СКАЧАТЬ PPTX", make_pptx(st.session_state.data, style_sel, f_size), f"{t_input}.pptx")
+        st.download_button("📥 СКАЧАТЬ PPTX", make_pptx(st.session_state.data, style_sel, f_size_final), f"{t_input}.pptx")
     else:
+        # ТЕСТ
         quiz = st.session_state.data.get('quiz', [])[:10]
         user_ans = []
         for i, q in enumerate(quiz):
@@ -126,7 +129,8 @@ if st.session_state.data:
             st.subheader(f"Результат: {score}/10")
             if score >= 8:
                 st.balloons()
-                st.download_button("📥 СКАЧАТЬ ФАЙЛ", make_pptx(st.session_state.data, style_sel, f_size), f"{t_input}.pptx")
+                # При скачивании применится выбранный шрифт f_size_final
+                st.download_button("📥 СКАЧАТЬ ФАЙЛ", make_pptx(st.session_state.data, style_sel, f_size_final), f"{t_input}.pptx")
             else:
                 if st.button("🔄 Сдать заново"):
                     st.session_state.test_key += 1
