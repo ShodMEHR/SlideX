@@ -4,7 +4,7 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.oxml.xmlchemy import OxmlElement
-import requests, json, textwrap, io
+import requests, json, textwrap, io, random
 
 # ================= CONFIG =================
 MODEL_NAME = "llama-3.3-70b-versatile"
@@ -18,7 +18,6 @@ THEMES = {
     "SUNSET STYLE": {"bg": (255,140,0), "acc": (255,255,0), "txt": (0,0,0)}
 }
 
-# Извлекаем секреты
 try:
     AI_KEY = st.secrets["GROQ_API_KEY"]
     S_ID = st.secrets.get("S_CODE", "SX-369")
@@ -34,21 +33,26 @@ def split_text_columns(text):
 
 # ================= AI LOGIC =================
 def ask_ai(topic, slides, lang, only_quiz=False):
+    # Добавляем случайный seed, чтобы ИИ каждый раз придумывал новое
+    seed_val = random.randint(1, 100000)
     mode = "ONLY quiz questions" if only_quiz else "full presentation"
+    
     prompt = f"""
-Create a {mode} about "{topic}" in {lang}.
+Create a {mode} about "{topic}" in {lang}. 
+Unique ID: {seed_val}
 Slides: {slides}
 
 STRICT RULES:
-- EACH slide 'intro' field MUST contain exactly 130–160 words.
-- Exactly 10 UNIQUE quiz questions in 'quiz' field.
-- Academic, detailed, professional style.
+- EACH slide 'intro' field MUST be between 130 and 160 words. No less!
+- Exactly 10 UNIQUE and FRESH quiz questions in 'quiz' field.
+- Do NOT repeat questions from previous sessions.
+- Academic, professional style.
 - OUTPUT ONLY VALID JSON.
 
 FORMAT:
 {{
- "slides": [{{"title": "Title", "intro": "130-160 words text...", "points": ["Fact 1","Fact 2"]}}],
- "quiz": [{{"q":"Question","o":{{"A":"x","B":"y","C":"z"}},"a":"A"}}]
+ "slides": [{{"title": "Title", "intro": "Long 130-160 words text...", "points": ["Detail 1","Detail 2"]}}],
+ "quiz": [{{"q":"Question?","o":{{"A":"opt1","B":"opt2","C":"opt3"}},"a":"A"}}]
 }}
 """
     try:
@@ -58,11 +62,11 @@ FORMAT:
             json={
                 "model": MODEL_NAME,
                 "messages": [
-                    {"role": "system", "content": "You are a university professor. You write very long, exhaustive texts. Every quiz must be new and based on the topic."},
+                    {"role": "system", "content": f"You are an expert academic professor. Current session seed: {seed_val}. You never repeat yourself and always provide exhaustive 150-word explanations per slide."},
                     {"role": "user", "content": prompt}
                 ],
                 "response_format": {"type": "json_object"},
-                "temperature": 0.7
+                "temperature": 0.8 # Повысили для разнообразия
             },
             timeout=120
         )
@@ -97,28 +101,27 @@ def make_pptx(data, theme, style):
         # Title
         tb = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12.3), Inches(0.9))
         tp = tb.text_frame.paragraphs[0]
-        tp.text = str(s.get("title", "ЗАГОЛОВОК")).upper()
-        tp.font.size, tp.font.bold, tp.font.color.rgb = Pt(30), True, RGBColor(*theme["acc"])
+        tp.text = str(s.get("title", "TITLE")).upper()
+        tp.font.size, tp.font.bold, tp.font.color.rgb = Pt(28), True, RGBColor(*theme["acc"])
 
-        # Two Columns Text
+        # Columns
         intro = str(s.get("intro", ""))
         left, right = split_text_columns(intro)
 
-        # Columns UI
         for txt, x_pos in [(left, 0.5), (right, 6.8)]:
-            box = slide.shapes.add_textbox(Inches(x_pos), Inches(1.4), Inches(6), Inches(5.7))
+            box = slide.shapes.add_textbox(Inches(x_pos), Inches(1.3), Inches(6.2), Inches(5.5))
             tf = box.text_frame; tf.word_wrap = True
             p = tf.paragraphs[0]
-            p.text = textwrap.fill(txt, 65)
-            p.font.size, p.font.color.rgb = Pt(14), RGBColor(*theme["txt"])
+            p.text = textwrap.fill(txt, 70)
+            p.font.size, p.font.color.rgb = Pt(13), RGBColor(*theme["txt"])
 
-        # Points
+        # Points (Bottom layer)
         icon = "⚓ " if style == "LUFFY STYLE" else "• "
-        last_box = slide.shapes.add_textbox(Inches(6.8), Inches(5.0), Inches(6), Inches(2))
+        point_box = slide.shapes.add_textbox(Inches(6.8), Inches(5.2), Inches(6), Inches(2))
         for pt in s.get("points", []):
-            p = last_box.text_frame.add_paragraph()
+            p = point_box.text_frame.add_paragraph()
             p.text = f"{icon}{pt}"
-            p.font.size, p.font.color.rgb = Pt(12), RGBColor(*theme["acc"])
+            p.font.size, p.font.color.rgb = Pt(11), RGBColor(*theme["acc"])
 
     buf = io.BytesIO(); prs.save(buf); buf.seek(0)
     return buf
@@ -127,10 +130,9 @@ def make_pptx(data, theme, style):
 st.set_page_config("SLIDEX PRO", layout="wide")
 st.title("🎨 SLIDEX PRO")
 
-# Инициализация сессии
 if "data" not in st.session_state:
     st.session_state.data = None
-    st.session_state.quiz_key = 0
+    st.session_state.quiz_key = random.randint(1, 9999)
     st.session_state.topic = ""
 
 with st.sidebar:
@@ -142,10 +144,10 @@ with st.sidebar:
     pass_code = st.text_input("Админ-код", type="password")
 
     if st.button("🚀 Сгенерировать") and t_input:
-        with st.spinner("Генерируем новый контент и тест..."):
-            # СБРОС СТАРЫХ ДАННЫХ
+        with st.spinner("Создаем уникальную презентацию и новый тест..."):
+            # ПОЛНЫЙ СБРОС ДЛЯ ОБНОВЛЕНИЯ ТЕСТА
             st.session_state.data = None
-            st.session_state.quiz_key += 1 
+            st.session_state.quiz_key = random.randint(1, 99999) 
             
             res = ask_ai(t_input, s_count, lang_name)
             if res and "slides" in res:
@@ -156,27 +158,29 @@ with st.sidebar:
                 st.error("Ошибка API. Попробуйте еще раз.")
 
 if st.session_state.data:
-    st.header(f"📋 Тема: {st.session_state.topic}")
+    st.header(f"📋 {st.session_state.topic}")
     
-    # Предпросмотр
+    # Предпросмотр с проверкой слов
     for i, s in enumerate(st.session_state.data.get("slides", [])):
         with st.expander(f"Слайд {i+1}: {s.get('title')}"):
-            st.write(f"**Слов:** {len(s.get('intro','').split())}")
+            wc = len(s.get('intro','').split())
+            st.write(f"**Слов на слайде:** {wc}")
             st.write(s.get("intro"))
 
     st.divider()
 
-    # Логика скачивания
+    # Скачивание
     if pass_code == S_ID:
-        st.success("🔓 Админ-доступ открыт")
+        st.success("🔓 Админ-код принят")
         buf = make_pptx(st.session_state.data, THEMES[style_name], style_name)
         st.download_button("📥 СКАЧАТЬ PPTX", buf, file_name=f"{st.session_state.topic}.pptx")
     else:
-        st.subheader("🧠 Тест для доступа (8/10)")
+        st.subheader("🧠 Тест (Нужно 8/10 для скачивания)")
         quiz = st.session_state.data.get("quiz", [])[:10]
         
         if quiz:
             user_answers = []
+            # Используем случайный quiz_key, чтобы радио-кнопки сбросились
             for i, q in enumerate(quiz):
                 ans = st.radio(
                     f"{i+1}. {q['q']}", ["A", "B", "C"],
@@ -188,8 +192,8 @@ if st.session_state.data:
             if st.button("Проверить ответы"):
                 score = sum(1 for i, a in enumerate(user_answers) if a == quiz[i]["a"])
                 if score >= 8:
-                    st.success(f"Результат: {score}/10. Можно скачивать!")
+                    st.success(f"Результат: {score}/10! Доступ открыт.")
                     buf = make_pptx(st.session_state.data, THEMES[style_name], style_name)
                     st.download_button("📥 СКАЧАТЬ PPTX", buf, file_name=f"{st.session_state.topic}.pptx")
                 else:
-                    st.error(f"Результат: {score}/10. Нужно минимум 8. Попробуйте перегенерировать.")
+                    st.error(f"Результат: {score}/10. Нужно 8. Попробуйте создать презентацию заново.")
