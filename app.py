@@ -25,58 +25,52 @@ except:
     AI_KEY = ""
     S_ID = "SX-369"
 
-# ================= AI FUNCTION (FIXED) =================
+# ================= AI FUNCTION =================
 def ask_ai(topic, slides, lang, only_quiz=False):
-    mode = "ONLY 10 new quiz questions" if only_quiz else "full presentation"
-    
-    # Жесткое требование по объему текста в промпте
+    mode = "ONLY 10 quiz questions" if only_quiz else "full presentation"
     prompt = f"""
 Create a {mode} about "{topic}" in {lang}.
 Slides count: {slides}
 
-STRICT CONSTRAINTS:
-1. Every 'intro' field MUST be a huge academic paragraph of 130-160 words. No short sentences.
+STRICT RULES:
+1. Every 'intro' MUST be exactly 130-160 words. DO NOT WRITE LESS OR MORE.
 2. Provide exactly 10 quiz questions.
-3. Return ONLY a valid JSON object.
+3. Return ONLY valid JSON.
 
-JSON Structure:
+JSON structure:
 {{
- "slides": [{{"title": "Title", "intro": "Long detailed text (130-160 words)...", "points": ["Fact 1", "Fact 2"]}}],
+ "slides": [{{"title": "Title", "intro": "Text 130-160 words...", "points": ["Fact 1", "Fact 2"]}}],
  "quiz": [{{"q": "Q", "o": {{"A": "v1", "B": "v2", "C": "v3"}}, "a": "A"}}]
 }}
 """
     try:
-        response = requests.post(
+        r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {AI_KEY}"},
             json={
                 "model": MODEL_NAME,
                 "messages": [{"role": "user", "content": prompt}],
                 "response_format": {"type": "json_object"},
-                "temperature": 0.7 # Немного творчества для объема
+                "temperature": 0.6
             },
             timeout=90
         )
-        res_json = response.json()
-        
-        # Защита от ошибки 'choices'
-        if "choices" in res_json:
-            return json.loads(res_json["choices"][0]["message"]["content"])
+        res_data = r.json()
+        if "choices" in res_data:
+            return json.loads(res_data["choices"][0]["message"]["content"])
         else:
-            st.error(f"Ошибка API: {res_json.get('error', {}).get('message', 'Unknown error')}")
+            st.error(f"Ошибка API: {res_data.get('error', {}).get('message', 'Нет ответа')}")
             return None
     except Exception as e:
-        st.error(f"Ошибка соединения: {e}")
+        st.error(f"Сбой ИИ: {e}")
         return None
 
-# ================= PPTX & TRANSITIONS =================
+# ================= PPTX =================
 def add_transition(slide, style_name):
     slide_el = slide._element
     transition = OxmlElement("p:transition")
     if style_name == "LUFFY STYLE":
-        push = OxmlElement("p:push")
-        push.set("dir", "l")
-        transition.append(push)
+        push = OxmlElement("p:push"); push.set("dir", "l"); transition.append(push)
     else:
         transition.append(OxmlElement("p:fade"))
     slide_el.append(transition)
@@ -90,9 +84,7 @@ def make_pptx(data, topic, theme, style_name):
         add_transition(slide, style_name)
         
         bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
-        bg.fill.solid()
-        bg.fill.fore_color.rgb = RGBColor(*theme["bg"])
-        bg.line.fill.background()
+        bg.fill.solid(); bg.fill.fore_color.rgb = RGBColor(*theme["bg"]); bg.line.fill.background()
 
         t_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12), Inches(1))
         p = t_box.text_frame.add_paragraph()
@@ -100,20 +92,17 @@ def make_pptx(data, topic, theme, style_name):
         p.font.size, p.font.bold, p.font.color.rgb = Pt(32), True, RGBColor(*theme["acc"])
 
         c_box = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(12), Inches(5.5))
-        tf = c_box.text_frame
-        tf.word_wrap = True
+        tf = c_box.text_frame; tf.word_wrap = True
         pi = tf.add_paragraph()
-        pi.text = textwrap.fill(str(s.get("intro", "")), width=100) # Чуть уже, чтобы текст шел вниз
-        pi.font.size, pi.font.color.rgb = Pt(15), RGBColor(*theme["txt"])
+        pi.text = textwrap.fill(str(s.get("intro", "")), width=100)
+        pi.font.size, pi.font.color.rgb = Pt(16), RGBColor(*theme["txt"])
 
         icon = "⚓ " if style_name == "LUFFY STYLE" else "• "
         for pt in s.get("points", []):
             pp = tf.add_paragraph()
             pp.text = f"{icon}{pt}"; pp.font.size, pp.font.color.rgb = Pt(14), RGBColor(*theme["acc"])
     
-    buf = io.BytesIO()
-    prs.save(buf)
-    buf.seek(0)
+    buf = io.BytesIO(); prs.save(buf); buf.seek(0)
     return buf
 
 # ================= UI =================
@@ -133,7 +122,7 @@ with st.sidebar:
     adm = st.text_input(".", type="password")
 
     if st.button("🚀 Сгенерировать") and topic_in:
-        with st.spinner("Создание контента..."):
+        with st.spinner("Генерируем контент и тесты..."):
             st.session_state.data = None
             st.session_state.quiz_key += 1
             res = ask_ai(topic_in, slide_num, lang_sel)
@@ -145,17 +134,17 @@ with st.sidebar:
 if st.session_state.data:
     st.header(f"📝 Предпросмотр: {st.session_state.topic}")
     for i, s in enumerate(st.session_state.data["slides"]):
-        with st.expander(f"Слайд {i+1}"):
+        with st.expander(f"Слайд {i+1}: {s.get('title')}"):
             st.write(s.get("intro"))
 
     st.divider()
     
     if adm == S_ID:
-        st.success("Доступ владельца")
+        st.success("✅ Доступ владельца")
         b = make_pptx(st.session_state.data, st.session_state.topic, THEMES[style_sel], style_sel)
-        st.download_button("📥 СКАЧАТЬ", b, file_name="presentation.pptx")
+        st.download_button("📥 СКАЧАТЬ PPTX", b, file_name=f"{st.session_state.topic}.pptx")
     else:
-        st.subheader("🧠 Тест (минимум 8/10)")
+        st.subheader("🧠 Тест (нужно 8/10)")
         quiz = st.session_state.data.get("quiz", [])[:10]
         u_ans = []
         for i, q in enumerate(quiz):
@@ -164,12 +153,11 @@ if st.session_state.data:
         if st.button("Проверить ответы"):
             score = sum(1 for i, a in enumerate(u_ans) if a == quiz[i]["a"])
             if score >= 8:
-                st.success(f"Результат: {score}/10")
+                st.success(f"Результат: {score}/10. Скачивание открыто!")
                 b = make_pptx(st.session_state.data, st.session_state.topic, THEMES[style_sel], style_sel)
-                st.download_button("📥 СКАЧАТЬ", b, file_name="presentation.pptx")
+                st.download_button("📥 СКАЧАТЬ PPTX", b, file_name=f"{st.session_state.topic}.pptx")
             else:
-                st.error(f"Результат: {score}/10. Обновление вопросов...")
-                # Исправленное обновление:
+                st.error(f"Результат: {score}/10. Нужно 8. Генерируем новый тест...")
                 new_q = ask_ai(st.session_state.topic, slide_num, lang_sel, only_quiz=True)
                 if new_q and "quiz" in new_q:
                     st.session_state.data["quiz"] = new_q["quiz"]
