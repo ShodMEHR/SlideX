@@ -4,7 +4,7 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 import requests, json, io
 
-# 1. ПОРЯДОК: School первый, Luffy последний
+# 1. ПОРЯДОК СТИЛЕЙ
 THEMES = {
     "SCHOOL STYLE": {"acc": (50, 150, 50), "icon": "✏️", "left": 1.5, "width": 10.3, "dark": True},
     "GIRLY STYLE": {"acc": (255, 105, 180), "icon": "🌸", "left": 1.5, "width": 10.3, "dark": False},
@@ -20,28 +20,30 @@ AI_KEY = st.secrets.get("GROQ_API_KEY", "")
 
 def ask_ai(topic, slides, lang):
     if not AI_KEY: return None
-    # Улучшенная инструкция для таджикского языка
-    system_msg = (f"You are a professional professor. Write in {lang}. "
-                  "IMPORTANT: For Tajik language, use only pure literary Tajik (забони адабии тоҷикӣ) without grammatical errors.")
+    # Усиленная инструкция для таджикского языка
+    sys_content = (f"You are a professional professor. Write in {lang}. "
+                   "For Tajik language, use only pure literary Tajik grammar (Забони адабии тоҷикӣ). "
+                   "Output ONLY valid JSON.")
     
     prompt = (f"Create presentation '{topic}'. Slides: {slides}. "
-              f"Each 'intro' field MUST be 80-160 words. "
-              f"Return ONLY valid JSON with 'slides' (title, intro) and 'quiz' (q, a, o).")
+              "Each slide 'intro' MUST be 80-160 words. "
+              "Create 10 quiz questions. Return JSON: {'slides': [{'title': '...', 'intro': '...'}], "
+              "'quiz': [{'q': '...', 'a': 'A', 'o': ['A-..','B-..','C-..']}]}")
     try:
         r = requests.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {AI_KEY}"},
             json={"model": "llama-3.3-70b-versatile", "messages": [
-                {"role": "system", "content": system_msg},
+                {"role": "system", "content": sys_content},
                 {"role": "user", "content": prompt}
             ], "response_format": {"type": "json_object"}}, timeout=120)
-        return r.json()["choices"][0]["message"]["content"]
+        return json.loads(r.json()["choices"][0]["message"]["content"])
     except: return None
 
 def make_pptx(data, style_name, font_size):
     prs = Presentation()
     prs.slide_width, prs.slide_height = Inches(13.33), Inches(7.5)
     theme = THEMES[style_name]
-    slides_data = data.get('slides', data.get('presentation', []))
+    slides_data = data.get('slides', [])
     
     for s in slides_data:
         slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -51,18 +53,15 @@ def make_pptx(data, style_name, font_size):
         except: pass
         
         # ЗАГОЛОВОК
-        title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12.3), Inches(1.0))
-        p_t = title_box.text_frame.paragraphs[0]
+        p_t = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12.3), Inches(1.0)).text_frame.paragraphs[0]
         p_t.text = f"{theme['icon']} {str(s.get('title', '')).upper()}"
         p_t.font.name, p_t.font.size, p_t.font.bold = 'Times New Roman', Pt(40), True
         p_t.font.color.rgb = RGBColor(*theme["acc"])
         
-        # ТЕКСТ
-        tf_box = slide.shapes.add_textbox(Inches(theme["left"]), Inches(1.5), Inches(theme["width"]), Inches(5.5))
-        tf = tf_box.text_frame
+        # ТЕКСТ (С выбранным размером)
+        tf = slide.shapes.add_textbox(Inches(theme["left"]), Inches(1.5), Inches(theme["width"]), Inches(5.5)).text_frame
         tf.word_wrap = True
-        p = tf.paragraphs[0]
-        p.text = str(s.get('intro', s.get('content', '')))
+        p = tf.paragraphs[0]; p.text = str(s.get('intro', ''))
         p.font.name, p.font.size, p.font.color.rgb = 'Times New Roman', Pt(font_size), txt_rgb
         tf.line_spacing = 1.15
         
@@ -73,33 +72,53 @@ st.set_page_config(page_title="SLIDEX PRO", layout="wide")
 st.title("🎨 SLIDEX PRO")
 
 if "data" not in st.session_state: st.session_state.data = None
+if "test_key" not in st.session_state: st.session_state.test_key = 0
+if "submitted" not in st.session_state: st.session_state.submitted = False
 
 with st.sidebar:
-    st.header("Настройки")
     t_input = st.text_input("Тема презентации")
-    s_count = st.slider("Кол-во слайдов", 2, 12, 7)
-    f_size = st.slider("Размер шрифта в PPTX", 26, 40, 32)
-    # ВЕРНУЛ ВЫБОР ЯЗЫКА
+    s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
+    f_size = st.slider("Размер шрифта в файле", 26, 40, 32)
     lang_choice = st.selectbox("Язык", ["Russian", "Tajik", "English"])
-    style_sel = st.selectbox("Выберите стиль", list(THEMES.keys()))
-    user_code = st.text_input("Код доступа", type="password")
+    style_sel = st.selectbox("Стиль", list(THEMES.keys()))
+    user_code = st.text_input("Код доступа", type="password") 
     
     if st.button("🚀 Сгенерировать"):
-        raw_res = ask_ai(t_input, s_count, lang_choice)
-        if raw_res:
-            st.session_state.data = json.loads(raw_res)
+        res = ask_ai(t_input, s_count, lang_choice)
+        if res:
+            st.session_state.data = res
+            st.session_state.test_key += 1
+            st.session_state.submitted = False
             st.rerun()
 
 if st.session_state.data:
-    slides = st.session_state.data.get('slides', st.session_state.data.get('presentation', []))
-    st.header(f"📺 Просмотр: {t_input}")
-    for i, s in enumerate(slides):
-        with st.expander(f"Слайд {i+1}: {s.get('title', 'Без названия')}"):
-            st.write(s.get('intro', s.get('content', 'Текст отсутствует')))
-    
-    # Чит-код упоминается только здесь для логики доступа
+    st.header(f"Просмотр контента")
+    for i, s in enumerate(st.session_state.data['slides']):
+        with st.expander(f"Слайд {i+1}: {s.get('title')}"):
+            st.write(s.get('intro'))
+
+    # ЛОГИКА ДОСТУПА
     if user_code == "SX-369":
-        st.success("🔓 Доступ разрешен")
+        st.success("🔓 Режим активен")
         st.download_button("📥 СКАЧАТЬ PPTX", make_pptx(st.session_state.data, style_sel, f_size), f"{t_input}.pptx")
     else:
-        st.warning("Для скачивания введите код доступа.")
+        st.header("✅ Проверка знаний (Тест)")
+        quiz = st.session_state.data.get('quiz', [])[:10]
+        user_ans = []
+        for i, q in enumerate(quiz):
+            ans = st.selectbox(f"Вопрос {i+1}: {q['q']}", ["-- Выберите --"] + q['o'], key=f"q_{i}_{st.session_state.test_key}")
+            user_ans.append(ans)
+
+        if st.button("Проверить результат"):
+            if "-- Выберите --" in user_ans: st.warning("Ответьте на все вопросы!")
+            else:
+                score = 0
+                for i, q in enumerate(quiz):
+                    if user_ans[i][0] == q['a']: score += 1
+                
+                st.subheader(f"Ваш результат: {score}/10")
+                if score >= 8:
+                    st.balloons()
+                    st.download_button("📥 СКАЧАТЬ PPTX", make_pptx(st.session_state.data, style_sel, f_size), f"{t_input}.pptx")
+                else:
+                    st.error("Нужно минимум 8 правильных ответов.")
