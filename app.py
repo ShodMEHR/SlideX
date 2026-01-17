@@ -21,17 +21,21 @@ def ask_gemini(topic, slide_count, language):
     
     Return ONLY valid JSON:
     {{
-      "slides": [ {{"title": "...", "intro": "..."}} ],
-      "quiz": [ {{"q": "...", "o": ["A-..", "B-..", "C-.."], "a": "A"}} ]
+      "slides": [ {{"title": "Заголовок", "intro": "Текст слайда"}} ],
+      "quiz": [ {{"q": "Вопрос", "o": ["A-..", "B-..", "C-.."], "a": "A"}} ]
     }}
     """
     try:
+        # ОБРАТИ ВНИМАНИЕ: Здесь скобки одинарные!
         response = model.generate_content(
             prompt, 
             generation_config={"response_mime_type": "application/json"}
         )
-        return json.loads(response.text)
-    except:
+        # Очистка на случай, если ИИ добавит лишние символы
+        clean_json = response.text.replace("```json", "").replace("```", "").strip()
+        return json.loads(clean_json)
+    except Exception as e:
+        st.error(f"Ошибка Gemini: {e}") # Это покажет нам ошибку прямо на экране
         return None
 
 # 1. ПОРЯДОК СТИЛЕЙ
