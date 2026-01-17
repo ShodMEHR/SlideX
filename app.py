@@ -14,15 +14,15 @@ if GEMINI_KEY:
     
 def ask_gemini(topic, slide_count, language):
     model = genai.GenerativeModel('gemini-1.5-pro') 
-    prompt = f"""
+        prompt = f"""
     Create a professional presentation structure in {language}.
     Topic: {topic}
     Slides: {slide_count}
     
     Return ONLY valid JSON:
     {{
-      "slides": [{"title": "...", "intro": "..."}],
-      "quiz": [{"q": "...", "o": ["A-..", "B-..", "C-.."], "a": "A"}]
+      "slides": [ {{"title": "...", "intro": "..."}} ],
+      "quiz": [ {{"q": "...", "o": ["A-..", "B-..", "C-.."], "a": "A"}} ]
     }}
     """
     try:
