@@ -87,10 +87,9 @@ with st.sidebar:
         img_data = get_base64("1000021955.jpg")
         st.markdown(
             f"""
-            <div style="text-align: left;">
-                <a href="https://amin-cloud-copy-8f1d0b41.base44.app/" target="_blank" style="text-decoration: none;">
-                    <img src="data:image/png;base64,{img_data}" width="80" style="border-radius: 5px; margin-left: 5px;">
-                    <p style="color: #00d4ff; font-size: 10px; margin-left: 5px; margin-top: 2px;">AminCloud</p>
+            <div style="text-align: left; margin-top: -20px; margin-left: -10px;">
+                <a href="https://amin-cloud-copy-8f1d0b41.base44.app/" target="_blank">
+                    <img src="data:image/png;base64,{img_data}" width="70" style="border-radius: 5px;">
                 </a>
             </div>
             """,
