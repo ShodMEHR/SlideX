@@ -99,10 +99,6 @@ with st.sidebar:
         )
     except:
         st.link_button("🌐 AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/")
-
-    st.divider()
-
-    st.link_button("🌐 Перейти в AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/", use_container_width=True)
     st.divider()
     t_input = st.text_input("Тема презентации")
     s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
