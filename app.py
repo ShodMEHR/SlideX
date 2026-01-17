@@ -69,7 +69,8 @@ def make_pptx(data, style_name, font_size):
     return buf
 
 st.set_page_config(page_title="SLIDEX PRO", layout="wide")
-st.title("🎨 SLIDEX PRO")
+# Вместо старого заголовка ставим твой прямоугольный логотип
+st.image("1000021968.jpg", use_container_width=True)
 
 if "data" not in st.session_state: st.session_state.data = None
 if "test_key" not in st.session_state: st.session_state.test_key = 0
