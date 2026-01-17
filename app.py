@@ -3,40 +3,6 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 import requests, json, io
-import google.generativeai as genai # ДОБАВИТЬ ЭТО
-
-# Ключи
-AI_KEY = st.secrets.get("GROQ_API_KEY", "")
-GEMINI_KEY = st.secrets.get("GEMINI_API_KEY", "") # ДОБАВИТЬ ЭТО
-
-if GEMINI_KEY:
-    genai.configure(api_key=GEMINI_KEY)
-    
-def ask_gemini(topic, slide_count, language):
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    prompt = f"""
-    Create a professional presentation structure in {language}.
-    Topic: {topic}
-    Slides: {slide_count}
-    
-    Return ONLY valid JSON:
-    {{
-      "slides": [ {{"title": "Заголовок", "intro": "Текст слайда"}} ],
-      "quiz": [ {{"q": "Вопрос", "o": ["A-..", "B-..", "C-.."], "a": "A"}} ]
-    }}
-    """
-    try:
-        # ОБРАТИ ВНИМАНИЕ: Здесь скобки одинарные!
-        response = model.generate_content(
-            prompt, 
-            generation_config={"response_mime_type": "application/json"}
-        )
-        # Очистка на случай, если ИИ добавит лишние символы
-        clean_json = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(clean_json)
-    except Exception as e:
-        st.error(f"Ошибка Gemini: {e}") # Это покажет нам ошибку прямо на экране
-        return None
 
 # 1. ПОРЯДОК СТИЛЕЙ
 THEMES = {
@@ -132,9 +98,7 @@ with st.sidebar:
     except:
         st.link_button("🌐 AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/")
 
-    model_sel = st.radio("Выбери ИИ:", ["Groq (Быстрый)", "Gemini (Умный)"])
     t_input = st.text_input("Тема презентации")
-
     s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
     f_size = st.slider("Размер шрифта в файле", 26, 40, 32)
     lang_choice = st.selectbox("Язык", ["Russian", "Tajik", "English"])
@@ -142,18 +106,12 @@ with st.sidebar:
     user_code = st.text_input("Код доступа", type="password") 
     
     if st.button("🚀 Сгенерировать"):
-        with st.spinner("ИИ готовит слайды..."):
-            # Проверяем, что выбрал юзер в model_sel
-            if model_sel == "Groq (Быстрый)":
-                res = ask_ai(t_input, s_count, lang_choice)
-            else:
-                res = ask_gemini(t_input, s_count, lang_choice)
-            
-            if res:
-                st.session_state.data = res
-                st.session_state.test_key += 1
-                st.session_state.submitted = False
-                st.rerun()
+        res = ask_ai(t_input, s_count, lang_choice)
+        if res:
+            st.session_state.data = res
+            st.session_state.test_key += 1
+            st.session_state.submitted = False
+            st.rerun()
 
 if st.session_state.data:
     st.header(f"Просмотр контента")
