@@ -76,6 +76,10 @@ if "test_key" not in st.session_state: st.session_state.test_key = 0
 if "submitted" not in st.session_state: st.session_state.submitted = False
 
 with st.sidebar:
+    # Логотип AminCloud как кнопка-переход
+    st.image("1000021955.jpg", use_container_width=True)
+    st.link_button("🌐 Перейти в AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/", use_container_width=True)
+    st.divider()
     t_input = st.text_input("Тема презентации")
     s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
     f_size = st.slider("Размер шрифта в файле", 26, 40, 32)
