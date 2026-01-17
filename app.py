@@ -128,7 +128,7 @@ with st.sidebar:
     except:
         st.link_button("🌐 AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/")
 
-        model_sel = st.radio("Выбери ИИ:", ["Groq (Быстрый)", "Gemini (Умный)"])
+    model_sel = st.radio("Выбери ИИ:", ["Groq (Быстрый)", "Gemini (Умный)"])
     t_input = st.text_input("Тема презентации")
 
     s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
