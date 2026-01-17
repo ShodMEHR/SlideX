@@ -4,17 +4,6 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 import requests, json, io
 
-def upload_to_amincloud(file_data, file_name):
-    url = "https://amin-cloud-copy-8f1d0b41.base44.app/api/upload"
-    amin_key = st.secrets.get("AMIN_CLOUD_KEY", "")
-    headers = {"Authorization": f"Bearer {amin_key}"}
-    files = {"file": (file_name, file_data, "application/vnd.openxmlformats-officedocument.presentationml.presentation")}
-    try:
-        r = requests.post(url, headers=headers, files=files, timeout=30)
-        return r.status_code == 200
-    except:
-        return False
-        
 # 1. ПОРЯДОК СТИЛЕЙ
 THEMES = {
     "SCHOOL STYLE": {"acc": (50, 150, 50), "icon": "✏️", "left": 1.5, "width": 10.3, "dark": True},
@@ -35,6 +24,126 @@ def ask_ai(topic, slides, lang):
     sys_content = (f"You are a professional professor. Write in {lang}. "
                    "For Tajik language, use only pure literary Tajik grammar (Забони адабии тоҷикӣ). "
                    "Output ONLY valid JSON.")
+    
+    prompt = (f"Create presentation '{topic}'. Slides: {slides}. "
+              "Each slide 'intro' MUST be 80-160 words. "
+              "Create 10 quiz questions. Return JSON: {'slides': [{'title': '...', 'intro': '...'}], "
+              "'quiz': [{'q': '...', 'a': 'A', 'o': ['A-..','B-..','C-..']}]}")
+    try:
+        r = requests.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {AI_KEY}"},
+            json={"model": "llama-3.3-70b-versatile", "messages": [
+                {"role": "system", "content": sys_content},
+                {"role": "user", "content": prompt}
+            ], "response_format": {"type": "json_object"}}, timeout=120)
+        return json.loads(r.json()["choices"][0]["message"]["content"])
+    except: return None
+
+def make_pptx(data, style_name, font_size):
+    prs = Presentation()
+    prs.slide_width, prs.slide_height = Inches(13.33), Inches(7.5)
+    theme = THEMES[style_name]
+    slides_data = data.get('slides', [])
+    
+    for s in slides_data:
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        txt_rgb = RGBColor(255, 255, 255) if theme["dark"] else RGBColor(30, 30, 30)
+        
+        try: slide.shapes.add_picture(f"{style_name}.jpg", 0, 0, width=prs.slide_width, height=prs.slide_height)
+        except: pass
+        
+        # ЗАГОЛОВОК
+        p_t = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12.3), Inches(1.0)).text_frame.paragraphs[0]
+        p_t.text = f"{theme['icon']} {str(s.get('title', '')).upper()}"
+        p_t.font.name, p_t.font.size, p_t.font.bold = 'Times New Roman', Pt(40), True
+        p_t.font.color.rgb = RGBColor(*theme["acc"])
+        
+        # ТЕКСТ (С выбранным размером)
+        tf = slide.shapes.add_textbox(Inches(theme["left"]), Inches(1.5), Inches(theme["width"]), Inches(5.5)).text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]; p.text = str(s.get('intro', ''))
+        p.font.name, p.font.size, p.font.color.rgb = 'Times New Roman', Pt(font_size), txt_rgb
+        tf.line_spacing = 1.15
+        
+    buf = io.BytesIO(); prs.save(buf); buf.seek(0)
+    return buf
+
+st.set_page_config(page_title="SLIDEX PRO", layout="wide")
+# Вместо старого заголовка ставим твой прямоугольный логотип
+st.image("Logo.jpg", use_container_width=True)
+
+if "data" not in st.session_state: st.session_state.data = None
+if "test_key" not in st.session_state: st.session_state.test_key = 0
+if "submitted" not in st.session_state: st.session_state.submitted = False
+
+with st.sidebar:
+    import base64
+    def get_base64(file_path):
+        with open(file_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+
+    try:
+        # Твой маленький логотип в углу
+        img_data = get_base64("1000021955.jpg")
+        st.markdown(
+            f"""
+            <div style="text-align: left; margin-top: -20px; margin-left: -10px;">
+                <a href="https://amin-cloud-copy-8f1d0b41.base44.app/" target="_blank">
+                    <img src="data:image/png;base64,{img_data}" width="70" style="border-radius: 5px;">
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    except:
+        st.link_button("🌐 AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/")
+
+    t_input = st.text_input("Тема презентации")
+    s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
+    f_size = st.slider("Размер шрифта в файле", 26, 40, 32)
+    lang_choice = st.selectbox("Язык", ["Russian", "Tajik", "English"])
+    style_sel = st.selectbox("Стиль", list(THEMES.keys()))
+    user_code = st.text_input("Код доступа", type="password") 
+    
+    if st.button("🚀 Сгенерировать"):
+        res = ask_ai(t_input, s_count, lang_choice)
+        if res:
+            st.session_state.data = res
+            st.session_state.test_key += 1
+            st.session_state.submitted = False
+            st.rerun()
+
+if st.session_state.data:
+    st.header(f"Просмотр контента")
+    for i, s in enumerate(st.session_state.data['slides']):
+        with st.expander(f"Слайд {i+1}: {s.get('title')}"):
+            st.write(s.get('intro'))
+
+    # ЛОГИКА ДОСТУПА
+    if user_code == "SX-369":
+        st.success("🔓 Режим активен")
+        st.download_button("📥 СКАЧАТЬ PPTX", make_pptx(st.session_state.data, style_sel, f_size), f"{t_input}.pptx")
+    else:
+        st.header("✅ Проверка знаний (Тест)")
+        quiz = st.session_state.data.get('quiz', [])[:10]
+        user_ans = []
+        for i, q in enumerate(quiz):
+            ans = st.selectbox(f"Вопрос {i+1}: {q['q']}", ["-- Выберите --"] + q['o'], key=f"q_{i}_{st.session_state.test_key}")
+            user_ans.append(ans)
+
+        if st.button("Проверить результат"):
+            if "-- Выберите --" in user_ans: st.warning("Ответьте на все вопросы!")
+            else:
+                score = 0
+                for i, q in enumerate(quiz):
+                    if user_ans[i][0] == q['a']: score += 1
+                
+                st.subheader(f"Ваш результат: {score}/10")
+                if score >= 8:
+                    st.balloons()
+                    st.download_button("📥 СКАЧАТЬ PPTX", make_pptx(st.session_state.data, style_sel, f_size), f"{t_input}.pptx")
+                else:
+                    st.error("Нужно минимум 8 правильных ответов.")                   "Output ONLY valid JSON.")
     
     prompt = (f"Create presentation '{topic}'. Slides: {slides}. "
               "Each slide 'intro' MUST be 80-160 words. "
