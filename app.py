@@ -3,17 +3,16 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 import requests, json, io
-import google.generativeai as genai
+import google.generativeai as genai # ДОБАВИТЬ ЭТО
 
-# Ключи и настройка Gemini
+# Ключи
 AI_KEY = st.secrets.get("GROQ_API_KEY", "")
-GEMINI_KEY = st.secrets.get("GEMINI_API_KEY", "")
+GEMINI_KEY = st.secrets.get("GEMINI_API_KEY", "") # ДОБАВИТЬ ЭТО
 
 if GEMINI_KEY:
     genai.configure(api_key=GEMINI_KEY)
     
 def ask_gemini(topic, slide_count, language):
-    """Функция для генерации через умную модель Gemini 1.5 Pro"""
     model = genai.GenerativeModel('gemini-1.5-pro') 
     prompt = f"""
     Create a professional presentation structure in {language}.
@@ -29,13 +28,13 @@ def ask_gemini(topic, slide_count, language):
     try:
         response = model.generate_content(
             prompt, 
-            generation_config={{"response_mime_type": "application/json"}}
+            generation_config={"response_mime_type": "application/json"}
         )
         return json.loads(response.text)
     except:
         return None
 
-# Темы оформления
+# 1. ПОРЯДОК СТИЛЕЙ
 THEMES = {
     "SCHOOL STYLE": {"acc": (50, 150, 50), "icon": "✏️", "left": 1.5, "width": 10.3, "dark": True},
     "GIRLY STYLE": {"acc": (255, 105, 180), "icon": "🌸", "left": 1.5, "width": 10.3, "dark": False},
@@ -47,17 +46,19 @@ THEMES = {
     "LUFFY STYLE": {"acc": (200, 30, 30), "icon": "⚓", "left": 5.8, "width": 7.0, "dark": False},
 }
 
+AI_KEY = st.secrets.get("GROQ_API_KEY", "")
+
 def ask_ai(topic, slides, lang):
-    """Функция для генерации через быструю модель Groq"""
     if not AI_KEY: return None
+    # Усиленная инструкция для таджикского языка
     sys_content = (f"You are a professional professor. Write in {lang}. "
-                   "For Tajik language, use only pure literary Tajik grammar. "
+                   "For Tajik language, use only pure literary Tajik grammar (Забони адабии тоҷикӣ). "
                    "Output ONLY valid JSON.")
     
     prompt = (f"Create presentation '{topic}'. Slides: {slides}. "
               "Each slide 'intro' MUST be 80-160 words. "
-              "Create 10 quiz questions. Return JSON: {{'slides': [{{'title': '...', 'intro': '...'}}], "
-              "'quiz': [{{'q': '...', 'a': 'A', 'o': ['A-..','B-..','C-..']}}]}}")
+              "Create 10 quiz questions. Return JSON: {'slides': [{'title': '...', 'intro': '...'}], "
+              "'quiz': [{'q': '...', 'a': 'A', 'o': ['A-..','B-..','C-..']}]}")
     try:
         r = requests.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {AI_KEY}"},
@@ -69,7 +70,6 @@ def ask_ai(topic, slides, lang):
     except: return None
 
 def make_pptx(data, style_name, font_size):
-    """Генерация PPTX файла"""
     prs = Presentation()
     prs.slide_width, prs.slide_height = Inches(13.33), Inches(7.5)
     theme = THEMES[style_name]
@@ -88,7 +88,7 @@ def make_pptx(data, style_name, font_size):
         p_t.font.name, p_t.font.size, p_t.font.bold = 'Times New Roman', Pt(40), True
         p_t.font.color.rgb = RGBColor(*theme["acc"])
         
-        # ТЕКСТ
+        # ТЕКСТ (С выбранным размером)
         tf = slide.shapes.add_textbox(Inches(theme["left"]), Inches(1.5), Inches(theme["width"]), Inches(5.5)).text_frame
         tf.word_wrap = True
         p = tf.paragraphs[0]; p.text = str(s.get('intro', ''))
@@ -98,12 +98,13 @@ def make_pptx(data, style_name, font_size):
     buf = io.BytesIO(); prs.save(buf); buf.seek(0)
     return buf
 
-# Настройка интерфейса
 st.set_page_config(page_title="SLIDEX PRO", layout="wide")
+# Вместо старого заголовка ставим твой прямоугольный логотип
 st.image("Logo.jpg", use_container_width=True)
 
 if "data" not in st.session_state: st.session_state.data = None
 if "test_key" not in st.session_state: st.session_state.test_key = 0
+if "submitted" not in st.session_state: st.session_state.submitted = False
 
 with st.sidebar:
     import base64
@@ -112,13 +113,24 @@ with st.sidebar:
             return base64.b64encode(f.read()).decode()
 
     try:
+        # Твой маленький логотип в углу
         img_data = get_base64("1000021955.jpg")
-        st.markdown(f'<div style="text-align: left; margin-top: -20px;"><img src="data:image/png;base64,{img_data}" width="70"></div>', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div style="text-align: left; margin-top: -20px; margin-left: -10px;">
+                <a href="https://amin-cloud-copy-8f1d0b41.base44.app/" target="_blank">
+                    <img src="data:image/png;base64,{img_data}" width="70" style="border-radius: 5px;">
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     except:
         st.link_button("🌐 AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/")
 
     model_sel = st.radio("Выбери ИИ:", ["Groq (Быстрый)", "Gemini (Умный)"])
     t_input = st.text_input("Тема презентации")
+
     s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
     f_size = st.slider("Размер шрифта в файле", 26, 40, 32)
     lang_choice = st.selectbox("Язык", ["Russian", "Tajik", "English"])
@@ -126,28 +138,26 @@ with st.sidebar:
     user_code = st.text_input("Код доступа", type="password") 
     
     if st.button("🚀 Сгенерировать"):
-        if not t_input:
-            st.error("Введите тему!")
-        else:
-            with st.spinner("ИИ готовит слайды..."):
-                if model_sel == "Groq (Быстрый)":
-                    res = ask_ai(t_input, s_count, lang_choice)
-                else:
-                    res = ask_gemini(t_input, s_count, lang_choice)
-                
-                if res:
-                    st.session_state.data = res
-                    st.session_state.test_key += 1
-                    st.rerun()
-                else:
-                    st.error("Ошибка ИИ. Проверьте ключи и лимиты.")
+        with st.spinner("ИИ готовит слайды..."):
+            # Проверяем, что выбрал юзер в model_sel
+            if model_sel == "Groq (Быстрый)":
+                res = ask_ai(t_input, s_count, lang_choice)
+            else:
+                res = ask_gemini(t_input, s_count, lang_choice)
+            
+            if res:
+                st.session_state.data = res
+                st.session_state.test_key += 1
+                st.session_state.submitted = False
+                st.rerun()
 
 if st.session_state.data:
-    st.header("Просмотр контента")
+    st.header(f"Просмотр контента")
     for i, s in enumerate(st.session_state.data['slides']):
         with st.expander(f"Слайд {i+1}: {s.get('title')}"):
             st.write(s.get('intro'))
 
+    # ЛОГИКА ДОСТУПА
     if user_code == "SX-369":
         st.success("🔓 Режим активен")
         st.download_button("📥 СКАЧАТЬ PPTX", make_pptx(st.session_state.data, style_sel, f_size), f"{t_input}.pptx")
@@ -160,10 +170,12 @@ if st.session_state.data:
             user_ans.append(ans)
 
         if st.button("Проверить результат"):
-            if "-- Выберите --" in user_ans:
-                st.warning("Ответьте на все вопросы!")
+            if "-- Выберите --" in user_ans: st.warning("Ответьте на все вопросы!")
             else:
-                score = sum(1 for i, q in enumerate(quiz) if user_ans[i][0] == q['a'])
+                score = 0
+                for i, q in enumerate(quiz):
+                    if user_ans[i][0] == q['a']: score += 1
+                
                 st.subheader(f"Ваш результат: {score}/10")
                 if score >= 8:
                     st.balloons()
