@@ -77,8 +77,27 @@ if "test_key" not in st.session_state: st.session_state.test_key = 0
 if "submitted" not in st.session_state: st.session_state.submitted = False
 
 with st.sidebar:
-    # Логотип AminCloud как кнопка-переход
-    st.image("1000021955.jpg", use_container_width=True)
+        # Компактный логотип-ссылка
+    import base64
+    def get_img_as_base64(file):
+        with open(file, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+
+    try:
+        # Здесь мы делаем картинку маленькой (width: 150px) и кликабельной
+        img_base64 = get_img_as_base64("1000021955.jpg")
+        st.markdown(
+            f'<a href="https://amin-cloud-copy-8f1d0b41.base44.app/" target="_blank">'
+            f'<img src="data:image/png;base64,{img_base64}" width="150" style="border-radius: 10px;">'
+            f'</a>',
+            unsafe_allow_html=True
+        )
+    except:
+        st.write("Логотип AminCloud") # Если файл не найдется, будет просто текст
+
+    st.divider()
+
     st.link_button("🌐 Перейти в AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/", use_container_width=True)
     st.divider()
     t_input = st.text_input("Тема презентации")
