@@ -14,7 +14,7 @@ if GEMINI_KEY:
     
 def ask_gemini(topic, slide_count, language):
     model = genai.GenerativeModel('gemini-1.5-pro') 
-        prompt = f"""
+    prompt = f"""
     Create a professional presentation structure in {language}.
     Topic: {topic}
     Slides: {slide_count}
