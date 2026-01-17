@@ -98,8 +98,6 @@ with st.sidebar:
     except:
         st.link_button("🌐 AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/")
 
-    st.divider()
-    st.divider()
     t_input = st.text_input("Тема презентации")
     s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
     f_size = st.slider("Размер шрифта в файле", 26, 40, 32)
