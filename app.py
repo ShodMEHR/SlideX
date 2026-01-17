@@ -3,7 +3,14 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 import requests, json, io
-
+def upload_to_amincloud(file_data, file_name):
+    url = "https://amin-cloud-copy-8f1d0b41.base44.app/api/upload" 
+    headers = {"Authorization": "Bearer ac556dbf8a71426d9e3b5ea18b7d40eb"}
+    files = {"file": (file_name, file_data, "application/vnd.openxmlformats-officedocument.presentationml.presentation")}
+    try:
+        r = requests.post(url, headers=headers, files=files, timeout=30)
+        return r.status_code == 200
+    except: return False
 # 1. ПОРЯДОК СТИЛЕЙ
 THEMES = {
     "SCHOOL STYLE": {"acc": (50, 150, 50), "icon": "✏️", "left": 1.5, "width": 10.3, "dark": True},
@@ -120,27 +127,29 @@ if st.session_state.data:
             st.write(s.get('intro'))
 
     # ЛОГИКА ДОСТУПА
-    if user_code == "SX-369":
+if user_code == "SX-369":
         st.success("🔓 Режим активен")
-        st.download_button("📥 СКАЧАТЬ PPTX", make_pptx(st.session_state.data, style_sel, f_size), f"{t_input}.pptx")
-    else:
-        st.header("✅ Проверка знаний (Тест)")
-        quiz = st.session_state.data.get('quiz', [])[:10]
-        user_ans = []
-        for i, q in enumerate(quiz):
-            ans = st.selectbox(f"Вопрос {i+1}: {q['q']}", ["-- Выберите --"] + q['o'], key=f"q_{i}_{st.session_state.test_key}")
-            user_ans.append(ans)
-
-        if st.button("Проверить результат"):
-            if "-- Выберите --" in user_ans: st.warning("Ответьте на все вопросы!")
-            else:
-                score = 0
-                for i, q in enumerate(quiz):
-                    if user_ans[i][0] == q['a']: score += 1
-                
-                st.subheader(f"Ваш результат: {score}/10")
-                if score >= 8:
-                    st.balloons()
-                    st.download_button("📥 СКАЧАТЬ PPTX", make_pptx(st.session_state.data, style_sel, f_size), f"{t_input}.pptx")
+        file_data = make_pptx(st.session_state.data, style_sel, f_size)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button("📥 СКАЧАТЬ PPTX", file_data, f"{t_input}.pptx")
+        with col2:
+            if st.button("☁️ В AMINCLOUD"):
+                if upload_to_amincloud(file_data.getvalue(), f"{t_input}.pptx"):
+                    st.toast("✅ Сохранено в облако!")
                 else:
-                    st.error("Нужно минимум 8 правильных ответов.")
+                    st.error("Ошибка API. Проверь настройки.")
+
+                         if score >= 8:
+                    st.balloons()
+                    file_data = make_pptx(st.session_state.data, style_sel, f_size)
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.download_button("📥 СКАЧАТЬ PPTX", file_data, f"{t_input}.pptx")
+                    with c2:
+                        if st.button("☁️ В AMINCLOUD", key="btn_quiz"):
+                            if upload_to_amincloud(file_data.getvalue(), f"{t_input}.pptx"):
+                                st.toast("✅ Сохранено в облако!")
+                            else:
+                                st.error("Ошибка API")
+
