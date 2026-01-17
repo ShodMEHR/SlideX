@@ -77,21 +77,20 @@ if "test_key" not in st.session_state: st.session_state.test_key = 0
 if "submitted" not in st.session_state: st.session_state.submitted = False
 
 with st.sidebar:
-    # 1. Делаем логотип маленьким и КЛИКАБЕЛЬНЫМ (всё в одном)
     import base64
     def get_base64(file_path):
         with open(file_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
 
     try:
-        # Используем твой файл 1000021955.jpg
+        # Твой маленький логотип в углу
         img_data = get_base64("1000021955.jpg")
         st.markdown(
             f"""
-            <div style="text-align: center;">
+            <div style="text-align: left;">
                 <a href="https://amin-cloud-copy-8f1d0b41.base44.app/" target="_blank" style="text-decoration: none;">
-                    <img src="data:image/png;base64,{img_data}" width="120" style="border-radius: 10px;">
-                    <p style="color: #00d4ff; font-size: 12px; margin-top: 5px;">Перейти в AminCloud</p>
+                    <img src="data:image/png;base64,{img_data}" width="80" style="border-radius: 5px; margin-left: 5px;">
+                    <p style="color: #00d4ff; font-size: 10px; margin-left: 5px; margin-top: 2px;">AminCloud</p>
                 </a>
             </div>
             """,
@@ -99,6 +98,8 @@ with st.sidebar:
         )
     except:
         st.link_button("🌐 AminCloud", "https://amin-cloud-copy-8f1d0b41.base44.app/")
+
+    st.divider()
     st.divider()
     t_input = st.text_input("Тема презентации")
     s_count = st.slider("Слайды (от 2 до 12)", 2, 12, 6)
