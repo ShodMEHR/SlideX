@@ -3,16 +3,18 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 import requests, json, io
-def upload_to_amincloud(file_data, file_name):
-    url = "https://amin-cloud-copy-8f1d0b41.base44.app/api/upload" 
-        amin_key = st.secrets.get("AMIN_CLOUD_KEY", "")
-    headers = {"Authorization": f"Bearer {amin_key}"}
 
+def upload_to_amincloud(file_data, file_name):
+    url = "https://amin-cloud-copy-8f1d0b41.base44.app/api/upload"
+    amin_key = st.secrets.get("AMIN_CLOUD_KEY", "")
+    headers = {"Authorization": f"Bearer {amin_key}"}
     files = {"file": (file_name, file_data, "application/vnd.openxmlformats-officedocument.presentationml.presentation")}
     try:
         r = requests.post(url, headers=headers, files=files, timeout=30)
         return r.status_code == 200
-    except: return False
+    except:
+        return False
+        
 # 1. ПОРЯДОК СТИЛЕЙ
 THEMES = {
     "SCHOOL STYLE": {"acc": (50, 150, 50), "icon": "✏️", "left": 1.5, "width": 10.3, "dark": True},
